@@ -11,7 +11,9 @@
 #' @param sam.name sample name.
 #' @param n.cores number of cores for parallel computing.
 #' @param ngene.chr minimal number of genes per chromosome for cell filtering.
+#' @param save_path absolute path to save result
 #' @param distance  distance methods include euclidean, and correlation coverted distance include pearson and spearman.
+#'
 #' @return 1) aneuploid/diploid prediction results; 2) CNA results in 220KB windows; 3) heatmap; 4) hclustering object.
 #'
 #' @examples
@@ -21,7 +23,7 @@
 #' @export
 
 
-copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW.DR=0.05, UP.DR=0.1, win.size=25, norm.cell.names="", KS.cut=0.1, sam.name="", distance="euclidean", n.cores=1){
+copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW.DR=0.05, UP.DR=0.1, win.size=25, norm.cell.names="", KS.cut=0.1, sam.name="", distance="euclidean", n.cores=1, save_path = NULL){
   start_time <- Sys.time()
   set.seed(1)
   sample.name <- paste(sam.name,"_copykat_", sep="")
@@ -229,7 +231,8 @@ copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW
   results.com <- apply(results$logCNA,2, function(x)(x <- x-mean(x)))
   RNA.copycat <- cbind(anno.mat2[, 1:7], results.com)
 
-  write.table(RNA.copycat, paste(sample.name, "CNA_raw_results_gene_by_cell.txt", sep=""), sep="\t", row.names = FALSE, quote = F)
+  write.table(RNA.copycat, paste(save_path,"1-",sample.name, "CNA_raw_results_gene_by_cell.txt", sep=""), sep="\t", 
+              row.names = FALSE, quote = F)
 
   print("step 6: convert to genomic bins...") ###need multi-core
   Aj <- convert.all.bins.hg20(DNA.mat = DNA.hg20, RNA.mat=RNA.copycat, n.cores = n.cores)
@@ -241,7 +244,7 @@ copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW
 if(cell.line=="yes"){
 
   mat.adj <- data.matrix(Aj$RNA.adj[, 4:ncol(Aj$RNA.adj)])
-  write.table(cbind(Aj$RNA.adj[, 1:3], mat.adj), paste(sample.name, "CNA_results.txt", sep=""), sep="\t", row.names = FALSE, quote = F)
+  write.table(cbind(Aj$RNA.adj[, 1:3], mat.adj), paste(save_path,"2-",sample.name, "CNA_results.txt", sep=""), sep="\t", row.names = FALSE, quote = F)
 
   if(distance=="euclidean"){
     hcc <- hclust(parallelDist::parDist(t(mat.adj),threads =n.cores, method = distance), method = "ward.D")
@@ -250,7 +253,7 @@ if(cell.line=="yes"){
   }
 
 
-  saveRDS(hcc, file = paste(sample.name,"clustering_results.rds",sep=""))
+  saveRDS(hcc, file = paste(save_path,"3-",sample.name,"clustering_results.rds",sep=""))
 
 #plot heatmap
  print("step 8: ploting heatmap ...")
@@ -272,7 +275,7 @@ if(cell.line=="yes"){
 #library(parallelDist)
 
   if(distance=="euclidean"){
-  jpeg(paste(sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
+  jpeg(paste(save_path,"3-",sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
    heatmap.3(t(mat.adj),dendrogram="r", distfun = function(x) parallelDist::parDist(x,threads =n.cores, method = distance), hclustfun = function(x) hclust(x, method="ward.D"),
             ColSideColors=chr1,Colv=NA, Rowv=TRUE,
             notecol="black",col=my_palette,breaks=col_breaks, key=TRUE,
@@ -282,7 +285,7 @@ if(cell.line=="yes"){
 
   dev.off()
   } else {
-    jpeg(paste(sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
+    jpeg(paste(save_path,"3-",sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
     heatmap.3(t(mat.adj),dendrogram="r", distfun = function(x) as.dist(1-cor(t(x), method = distance)), hclustfun = function(x) hclust(x, method="ward.D"),
                  ColSideColors=chr1,Colv=NA, Rowv=TRUE,
               notecol="black",col=my_palette,breaks=col_breaks, key=TRUE,
@@ -378,10 +381,11 @@ if(cell.line=="yes"){
   res <- cbind(names(com.preN), com.preN)
   colnames(res) <- c("cell.names", "copykat.pred")
 
-  write.table(res, paste(sample.name, "prediction.txt",sep=""), sep="\t", row.names = FALSE, quote = FALSE)
+  write.table(res, paste(save_path,"4-",sample.name, "prediction.txt",sep=""), sep="\t", row.names = FALSE, quote = FALSE)
 
   ####save copycat CNA
-  write.table(cbind(Aj$RNA.adj[, 1:3], mat.adj), paste(sample.name, "CNA_results.txt", sep=""), sep="\t", row.names = FALSE, quote = F)
+  write.table(cbind(Aj$RNA.adj[, 1:3], mat.adj), paste(save_path,"5-",sample.name, "CNA_results.txt", sep=""), sep="\t", 
+              row.names = FALSE, quote = F)
 
 
   ####%%%%%%%%%%%%%%%%%next heatmaps, subpopulations and tSNE overlay
@@ -407,7 +411,7 @@ if(cell.line=="yes"){
   col_breaks = c(seq(-1,-0.4,length=50),seq(-0.4,-0.2,length=150),seq(-0.2,0.2,length=600),seq(0.2,0.4,length=150),seq(0.4, 1,length=50))
 
   if(distance=="euclidean"){
-  jpeg(paste(sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
+  jpeg(paste(save_path,"6-",sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
    heatmap.3(t(mat.adj),dendrogram="r", distfun = function(x) parallelDist::parDist(x,threads =n.cores, method = distance), hclustfun = function(x) hclust(x, method="ward.D"),
             ColSideColors=chr1,RowSideColors=cells,Colv=NA, Rowv=TRUE,
             notecol="black",col=my_palette,breaks=col_breaks, key=TRUE,
@@ -418,7 +422,7 @@ if(cell.line=="yes"){
   legend("topright", paste("pred.",names(table(com.preN)),sep=""), pch=15,col=RColorBrewer::brewer.pal(n = 8, name = "Dark2")[2:1], cex=1)
   dev.off()
   } else {
-    jpeg(paste(sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
+    jpeg(paste(save_path,"6-",sample.name,"heatmap.jpeg",sep=""), height=h*250, width=4000, res=100)
     heatmap.3(t(mat.adj),dendrogram="r", distfun = function(x) as.dist(1-cor(t(x), method = distance)), hclustfun = function(x) hclust(x, method="ward.D"),
                  ColSideColors=chr1,RowSideColors=cells,Colv=NA, Rowv=TRUE,
               notecol="black",col=my_palette,breaks=col_breaks, key=TRUE,
